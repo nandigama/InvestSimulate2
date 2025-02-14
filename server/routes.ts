@@ -2,12 +2,12 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { setupAuth } from "./auth";
 import { storage } from "./storage";
-import { 
-  tradeSchema, 
-  updateTraderSchema, 
-  createSubscriptionSchema, 
+import {
+  tradeSchema,
+  updateTraderSchema,
+  createSubscriptionSchema,
   followTraderSchema,
-  copyTradingSettingsSchema 
+  copyTradingSettingsSchema
 } from "@shared/schema";
 
 export function registerRoutes(app: Express): Server {
@@ -36,22 +36,38 @@ export function registerRoutes(app: Express): Server {
       if (req.user.isTrader) {
         // Get all copy trading settings that follow this trader
         const followers = await storage.getFollowers(req.user.id);
-        for (const follower of followers) {
-          const settings = await storage.getCopyTradingSettings(follower.followerId);
-          for (const setting of settings) {
-            if (setting.enabled && setting.followedTraderId === req.user.id) {
-              try {
-                await storage.processCopyTrade(transaction.id, setting);
-              } catch (error) {
-                console.error(`Failed to copy trade for follower ${follower.followerId}:`, error);
-              }
+
+        // Process copy trades for each follower
+        const copyTradePromises = followers.map(async (follower) => {
+          try {
+            const settings = await storage.getCopyTradingSettings(follower.followerId);
+
+            // Find the active copy trading setting for this trader
+            const activeSetting = settings.find(
+              setting => setting.enabled &&
+              setting.followedTraderId === req.user!.id
+            );
+
+            if (activeSetting) {
+              console.log(`Processing copy trade for follower ${follower.followerId} with settings:`, activeSetting);
+
+              return await storage.processCopyTrade(transaction.id, activeSetting);
             }
+          } catch (error) {
+            console.error(
+              `Failed to copy trade for follower ${follower.followerId}:`,
+              error instanceof Error ? error.message : 'Unknown error'
+            );
           }
-        }
+        });
+
+        // Wait for all copy trades to be processed
+        await Promise.all(copyTradePromises);
       }
 
       res.json(transaction);
     } catch (err: any) {
+      console.error('Trade execution failed:', err);
       res.status(400).json({ message: err.message });
     }
   });

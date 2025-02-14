@@ -491,46 +491,64 @@ export class DatabaseStorage implements IStorage {
       originalAmount
     );
 
+    // Calculate shares to copy while respecting position size limits
     const copyShares = (copyAmount / parseFloat(originalTrade.price)).toFixed(6);
 
-    // Create the copy trade record
-    const [copiedTrade] = await db
-      .insert(copiedTrades)
-      .values({
-        originalTransactionId,
-        copiedByUserId: settings.userId,
-        status: "pending",
-        copiedShares: copyShares,
-        copiedPrice: originalTrade.price,
-      })
-      .returning();
-
-    // Execute the actual trade
-    try {
-      await this.executeTransaction(settings.userId, {
-        symbol: originalTrade.symbol,
-        shares: parseFloat(copyShares),
-        type: originalTrade.type,
-      });
-
-      // Update the copy trade status to executed
-      const [updatedCopiedTrade] = await db
-        .update(copiedTrades)
-        .set({ status: "executed" })
-        .where(eq(copiedTrades.id, copiedTrade.id))
+    // Start a database transaction to ensure atomicity
+    return await db.transaction(async (tx) => {
+      // Create the copy trade record
+      const [copiedTrade] = await tx
+        .insert(copiedTrades)
+        .values({
+          originalTransactionId,
+          copiedByUserId: settings.userId,
+          status: "pending",
+          copiedShares: copyShares,
+          copiedPrice: originalTrade.price,
+        })
         .returning();
 
-      return updatedCopiedTrade;
-    } catch (error) {
-      // Update the copy trade status to failed
-      const [failedCopiedTrade] = await db
-        .update(copiedTrades)
-        .set({ status: "failed" })
-        .where(eq(copiedTrades.id, copiedTrade.id))
-        .returning();
+      try {
+        // Check user's balance before executing the trade
+        const user = await this.getUser(settings.userId);
+        if (!user) {
+          throw new Error("User not found");
+        }
 
-      return failedCopiedTrade;
-    }
+        const tradeAmount = parseFloat(copyShares) * parseFloat(originalTrade.price);
+        if (originalTrade.type === "buy" && tradeAmount > parseFloat(user.virtualBalance)) {
+          throw new Error("Insufficient funds for copy trade");
+        }
+
+        // Execute the actual trade
+        await this.executeTransaction(settings.userId, {
+          symbol: originalTrade.symbol,
+          shares: parseFloat(copyShares),
+          type: originalTrade.type,
+        });
+
+        // Update the copy trade status to executed
+        const [updatedCopiedTrade] = await tx
+          .update(copiedTrades)
+          .set({ status: "executed" })
+          .where(eq(copiedTrades.id, copiedTrade.id))
+          .returning();
+
+        return updatedCopiedTrade;
+      } catch (error) {
+        // Update the copy trade status to failed
+        const [failedCopiedTrade] = await tx
+          .update(copiedTrades)
+          .set({ 
+            status: "failed",
+          })
+          .where(eq(copiedTrades.id, copiedTrade.id))
+          .returning();
+
+        console.error(`Copy trade failed for user ${settings.userId}:`, error);
+        return failedCopiedTrade;
+      }
+    });
   }
 }
 
