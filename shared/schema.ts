@@ -50,6 +50,35 @@ export const payments = pgTable("payments", {
   timestamp: timestamp("timestamp").notNull().defaultNow(),
 });
 
+export const followers = pgTable("followers", {
+  id: serial("id").primaryKey(),
+  followerId: integer("follower_id").notNull(),
+  followedId: integer("followed_id").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const copyTradingSettings = pgTable("copy_trading_settings", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
+  followedTraderId: integer("followed_trader_id").notNull(),
+  enabled: boolean("enabled").notNull().default(true),
+  copyAmount: decimal("copy_amount").notNull(),
+  riskLevel: text("risk_level", { enum: ["low", "medium", "high"] }).notNull(),
+  maxPositionSize: decimal("max_position_size").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const copiedTrades = pgTable("copied_trades", {
+  id: serial("id").primaryKey(),
+  originalTransactionId: integer("original_transaction_id").notNull(),
+  copiedByUserId: integer("copied_by_user_id").notNull(),
+  status: text("status", { enum: ["pending", "executed", "failed"] }).notNull(),
+  copiedShares: decimal("copied_shares").notNull(),
+  copiedPrice: decimal("copied_price").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -70,6 +99,17 @@ export const tradeSchema = z.object({
   type: z.enum(["buy", "sell"]),
 });
 
+export const followTraderSchema = z.object({
+  followedId: z.number(),
+});
+
+export const copyTradingSettingsSchema = createInsertSchema(copyTradingSettings)
+  .omit({ id: true, createdAt: true, updatedAt: true, userId: true })
+  .extend({
+    copyAmount: z.number().min(0),
+    maxPositionSize: z.number().min(0),
+  });
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type Portfolio = typeof portfolios.$inferSelect;
@@ -79,3 +119,8 @@ export type Payment = typeof payments.$inferSelect;
 export type UpdateTrader = z.infer<typeof updateTraderSchema>;
 export type CreateSubscription = z.infer<typeof createSubscriptionSchema>;
 export type Trade = z.infer<typeof tradeSchema>;
+export type Follower = typeof followers.$inferSelect;
+export type CopyTradingSettings = typeof copyTradingSettings.$inferSelect;
+export type CopiedTrade = typeof copiedTrades.$inferSelect;
+export type FollowTrader = z.infer<typeof followTraderSchema>;
+export type InsertCopyTradingSettings = z.infer<typeof copyTradingSettingsSchema>;
