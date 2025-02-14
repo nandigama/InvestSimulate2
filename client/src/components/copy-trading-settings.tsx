@@ -7,15 +7,20 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { CopyTradingSettings as CopyTradingSettingsType } from "@shared/schema";
 
-export function CopyTradingSettings({ traderId }: { traderId: number }) {
+interface Props {
+  traderId: number;
+}
+
+export function CopyTradingSettings({ traderId }: Props) {
   const [copyAmount, setCopyAmount] = useState("100");
   const [maxPositionSize, setMaxPositionSize] = useState("1000");
   const [riskLevel, setRiskLevel] = useState("medium");
 
-  const { data: settings, isLoading } = useQuery({
+  const { data: settings, isLoading } = useQuery<CopyTradingSettingsType[]>({
     queryKey: ["/api/copy-trading/settings"],
-    select: (data) => data.find((s: any) => s.followedTraderId === traderId),
+    select: (data) => data.find((s) => s.followedTraderId === traderId),
   });
 
   const { mutate: createSettings, isPending: isCreating } = useMutation({
@@ -26,7 +31,8 @@ export function CopyTradingSettings({ traderId }: { traderId: number }) {
   });
 
   const { mutate: updateSettings, isPending: isUpdating } = useMutation({
-    mutationFn: ({ id, data }: any) => apiRequest(`/api/copy-trading/settings/${id}`, "PUT", data),
+    mutationFn: ({ id, data }: { id: number; data: any }) => 
+      apiRequest(`/api/copy-trading/settings/${id}`, "PUT", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/copy-trading/settings"] });
     },

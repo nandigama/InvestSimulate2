@@ -11,6 +11,7 @@ import {
   TableRow 
 } from "@/components/ui/table";
 import { CopyTradingSettings } from "./copy-trading-settings";
+import React from 'react';
 
 export function TraderList() {
   const { user } = useAuth();
@@ -39,8 +40,8 @@ export function TraderList() {
             {traders
               .filter(trader => trader.id !== user?.id && trader.isTrader)
               .map(trader => (
-                <>
-                  <TableRow key={trader.id}>
+                <React.Fragment key={trader.id}>
+                  <TableRow>
                     <TableCell className="font-medium">{trader.username}</TableCell>
                     <TableCell className="max-w-md truncate">{trader.bio || "No bio available"}</TableCell>
                     <TableCell>${parseFloat(trader.monthlySubscriptionFee || "0").toFixed(2)}</TableCell>
@@ -62,7 +63,7 @@ export function TraderList() {
                       </TableCell>
                     </TableRow>
                   )}
-                </>
+                </React.Fragment>
               ))}
             {traders.length === 0 && (
               <TableRow>
