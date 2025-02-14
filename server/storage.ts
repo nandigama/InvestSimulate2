@@ -191,19 +191,25 @@ export class DatabaseStorage implements IStorage {
       .set({
         isTrader: true,
         monthlySubscriptionFee: update.monthlySubscriptionFee.toString(),
-        bio: update.bio,
+        bio: update.bio || null,
       })
       .where(eq(users.id, userId))
       .returning();
+
+    if (!updatedUser) {
+      throw new Error("Failed to update trader profile");
+    }
+
     return updatedUser;
   }
 
   async getTraders(): Promise<User[]> {
-    return db
+    const traders = await db
       .select()
       .from(users)
-      .where(eq(users.isTrader, true))
-      .orderBy(desc(users.monthlySubscriptionFee));
+      .where(eq(users.isTrader, true));
+
+    return traders.filter(trader => trader.monthlySubscriptionFee !== "0.00");
   }
 
   async createSubscription(subscriberId: number, traderId: number): Promise<Subscription> {
