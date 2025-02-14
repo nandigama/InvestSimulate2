@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
-import { apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,25 +12,36 @@ interface Props {
   traderId: number;
 }
 
+type CopyTradingSettingsData = {
+  followedTraderId: number;
+  copyAmount: number;
+  maxPositionSize: number;
+  riskLevel: "low" | "medium" | "high";
+  enabled: boolean;
+};
+
 export function CopyTradingSettings({ traderId }: Props) {
   const [copyAmount, setCopyAmount] = useState("100");
   const [maxPositionSize, setMaxPositionSize] = useState("1000");
-  const [riskLevel, setRiskLevel] = useState("medium");
+  const [riskLevel, setRiskLevel] = useState<"low" | "medium" | "high">("medium");
 
   const { data: settings, isLoading } = useQuery<CopyTradingSettingsType[]>({
     queryKey: ["/api/copy-trading/settings"],
-    select: (data) => data.find((s) => s.followedTraderId === traderId),
+    queryFn: () => apiRequest("/api/copy-trading/settings", "GET"),
   });
 
+  const activeSetting = settings?.find((s) => s.followedTraderId === traderId);
+
   const { mutate: createSettings, isPending: isCreating } = useMutation({
-    mutationFn: (data: any) => apiRequest("/api/copy-trading/settings", "POST", data),
+    mutationFn: (data: CopyTradingSettingsData) => 
+      apiRequest("/api/copy-trading/settings", "POST", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/copy-trading/settings"] });
     },
   });
 
   const { mutate: updateSettings, isPending: isUpdating } = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) => 
+    mutationFn: ({ id, data }: { id: number; data: Partial<CopyTradingSettingsData> }) => 
       apiRequest(`/api/copy-trading/settings/${id}`, "PUT", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/copy-trading/settings"] });
@@ -42,7 +52,7 @@ export function CopyTradingSettings({ traderId }: Props) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const data = {
+    const data: CopyTradingSettingsData = {
       followedTraderId: traderId,
       copyAmount: parseFloat(copyAmount),
       maxPositionSize: parseFloat(maxPositionSize),
@@ -50,8 +60,8 @@ export function CopyTradingSettings({ traderId }: Props) {
       enabled: true,
     };
 
-    if (settings) {
-      updateSettings({ id: settings.id, data });
+    if (activeSetting) {
+      updateSettings({ id: activeSetting.id, data });
     } else {
       createSettings(data);
     }
@@ -98,12 +108,12 @@ export function CopyTradingSettings({ traderId }: Props) {
             </Select>
           </div>
           <Button type="submit" disabled={isCreating || isUpdating}>
-            {settings ? "Update Settings" : "Enable Copy Trading"}
+            {activeSetting ? "Update Settings" : "Enable Copy Trading"}
           </Button>
-          {settings && (
+          {activeSetting && (
             <Alert>
               <AlertDescription>
-                Copy trading is {settings.enabled ? "enabled" : "disabled"} for this trader
+                Copy trading is {activeSetting.enabled ? "enabled" : "disabled"} for this trader
               </AlertDescription>
             </Alert>
           )}
