@@ -209,7 +209,8 @@ export class DatabaseStorage implements IStorage {
       .from(users)
       .where(eq(users.isTrader, true));
 
-    return traders.filter(trader => trader.monthlySubscriptionFee !== "0.00");
+    // Include traders with any subscription fee (even 0) as long as they are marked as traders
+    return traders;
   }
 
   async createSubscription(subscriberId: number, traderId: number): Promise<Subscription> {

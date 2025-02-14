@@ -36,12 +36,12 @@ export function TraderList() {
           </TableHeader>
           <TableBody>
             {traders
-              .filter(trader => trader.id !== user?.id)
+              .filter(trader => trader.id !== user?.id && trader.isTrader)
               .map(trader => (
                 <TableRow key={trader.id}>
                   <TableCell className="font-medium">{trader.username}</TableCell>
-                  <TableCell className="max-w-md truncate">{trader.bio}</TableCell>
-                  <TableCell>${trader.monthlySubscriptionFee}</TableCell>
+                  <TableCell className="max-w-md truncate">{trader.bio || "No bio available"}</TableCell>
+                  <TableCell>${parseFloat(trader.monthlySubscriptionFee || "0").toFixed(2)}</TableCell>
                   <TableCell>
                     <Button
                       size="sm"
