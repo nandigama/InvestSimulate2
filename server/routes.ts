@@ -30,17 +30,23 @@ export function registerRoutes(app: Express): Server {
 
     try {
       // Execute the original trade
+      console.log(`Executing original trade for user ${req.user.id}:`, parseResult.data);
       const transaction = await storage.executeTransaction(req.user.id, parseResult.data);
+      console.log('Original trade executed successfully:', transaction);
 
-      // If the trade is successful and the user is a trader, process copy trades for followers
+      // If the trade is successful and the user is a trader, process copy trades
       if (req.user.isTrader) {
+        console.log(`User ${req.user.id} is a trader, processing copy trades`);
         // Get all copy trading settings that follow this trader
         const followers = await storage.getFollowers(req.user.id);
+        console.log(`Found ${followers.length} followers for trader ${req.user.id}`);
 
         // Process copy trades for each follower
         const copyTradePromises = followers.map(async (follower) => {
           try {
+            console.log(`Processing copy trade for follower ${follower.followerId}`);
             const settings = await storage.getCopyTradingSettings(follower.followerId);
+            console.log(`Copy trading settings for follower ${follower.followerId}:`, settings);
 
             // Find the active copy trading setting for this trader
             const activeSetting = settings.find(
@@ -49,9 +55,12 @@ export function registerRoutes(app: Express): Server {
             );
 
             if (activeSetting) {
-              console.log(`Processing copy trade for follower ${follower.followerId} with settings:`, activeSetting);
-
-              return await storage.processCopyTrade(transaction.id, activeSetting);
+              console.log(`Found active setting for follower ${follower.followerId}:`, activeSetting);
+              const copyTrade = await storage.processCopyTrade(transaction.id, activeSetting);
+              console.log(`Copy trade processed for follower ${follower.followerId}:`, copyTrade);
+              return copyTrade;
+            } else {
+              console.log(`No active copy trading settings found for follower ${follower.followerId}`);
             }
           } catch (error) {
             console.error(
@@ -62,7 +71,10 @@ export function registerRoutes(app: Express): Server {
         });
 
         // Wait for all copy trades to be processed
-        await Promise.all(copyTradePromises);
+        const copyTradeResults = await Promise.all(copyTradePromises);
+        console.log('Copy trade results:', copyTradeResults);
+      } else {
+        console.log(`User ${req.user.id} is not a trader, skipping copy trades`);
       }
 
       res.json(transaction);
