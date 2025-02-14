@@ -27,22 +27,29 @@ export function CopyTradingSettings({ traderId }: Props) {
 
   const { data: settings, isLoading } = useQuery<CopyTradingSettingsType[]>({
     queryKey: ["/api/copy-trading/settings"],
-    queryFn: () => apiRequest("/api/copy-trading/settings", "GET"),
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/copy-trading/settings");
+      return res.json();
+    }
   });
 
   const activeSetting = settings?.find((s) => s.followedTraderId === traderId);
 
   const { mutate: createSettings, isPending: isCreating } = useMutation({
-    mutationFn: (data: CopyTradingSettingsData) => 
-      apiRequest("/api/copy-trading/settings", "POST", data),
+    mutationFn: async (data: CopyTradingSettingsData) => {
+      const res = await apiRequest("POST", "/api/copy-trading/settings", data);
+      return res.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/copy-trading/settings"] });
     },
   });
 
   const { mutate: updateSettings, isPending: isUpdating } = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<CopyTradingSettingsData> }) => 
-      apiRequest(`/api/copy-trading/settings/${id}`, "PUT", data),
+    mutationFn: async ({ id, data }: { id: number; data: Partial<CopyTradingSettingsData> }) => {
+      const res = await apiRequest("PUT", `/api/copy-trading/settings/${id}`, data);
+      return res.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/copy-trading/settings"] });
     },
