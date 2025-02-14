@@ -10,6 +10,7 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
+import { CopyTradingSettings } from "./copy-trading-settings";
 
 export function TraderList() {
   const { user } = useAuth();
@@ -38,22 +39,31 @@ export function TraderList() {
             {traders
               .filter(trader => trader.id !== user?.id && trader.isTrader)
               .map(trader => (
-                <TableRow key={trader.id}>
-                  <TableCell className="font-medium">{trader.username}</TableCell>
-                  <TableCell className="max-w-md truncate">{trader.bio || "No bio available"}</TableCell>
-                  <TableCell>${parseFloat(trader.monthlySubscriptionFee || "0").toFixed(2)}</TableCell>
-                  <TableCell>
-                    <Button
-                      size="sm"
-                      variant={isSubscribed(trader.id) ? "secondary" : "default"}
-                      disabled={isSubscribed(trader.id) || isSubscribing}
-                      onClick={() => subscribe(trader.id)}
-                    >
-                      {isSubscribed(trader.id) ? "Subscribed" : "Subscribe"}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-            ))}
+                <>
+                  <TableRow key={trader.id}>
+                    <TableCell className="font-medium">{trader.username}</TableCell>
+                    <TableCell className="max-w-md truncate">{trader.bio || "No bio available"}</TableCell>
+                    <TableCell>${parseFloat(trader.monthlySubscriptionFee || "0").toFixed(2)}</TableCell>
+                    <TableCell>
+                      <Button
+                        size="sm"
+                        variant={isSubscribed(trader.id) ? "secondary" : "default"}
+                        disabled={isSubscribed(trader.id) || isSubscribing}
+                        onClick={() => subscribe(trader.id)}
+                      >
+                        {isSubscribed(trader.id) ? "Subscribed" : "Subscribe"}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                  {isSubscribed(trader.id) && (
+                    <TableRow>
+                      <TableCell colSpan={4}>
+                        <CopyTradingSettings traderId={trader.id} />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </>
+              ))}
             {traders.length === 0 && (
               <TableRow>
                 <TableCell colSpan={4} className="text-center text-muted-foreground">
