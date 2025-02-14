@@ -5,6 +5,7 @@ import { TradingPanel } from "@/components/trading-panel";
 import { PortfolioSummary } from "@/components/portfolio-summary";
 import { Leaderboard } from "@/components/leaderboard";
 import { LogOut } from "lucide-react";
+import { HeatmapChart } from "@/components/heatmap-chart";
 
 export default function HomePage() {
   const { user, logoutMutation } = useAuth();
@@ -29,9 +30,10 @@ export default function HomePage() {
         <div className="grid lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <StockChart symbol="SPY" />
+            <HeatmapChart />
             <TradingPanel />
           </div>
-          
+
           <div className="space-y-6">
             <Leaderboard />
           </div>
