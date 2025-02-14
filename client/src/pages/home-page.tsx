@@ -6,6 +6,7 @@ import { PortfolioSummary } from "@/components/portfolio-summary";
 import { Leaderboard } from "@/components/leaderboard";
 import { LogOut } from "lucide-react";
 import { HeatmapChart } from "@/components/heatmap-chart";
+import { Link } from "wouter";
 
 export default function HomePage() {
   const { user, logoutMutation } = useAuth();
@@ -16,6 +17,9 @@ export default function HomePage() {
         <div className="container mx-auto p-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold">PluralTrades</h1>
           <div className="flex items-center gap-4">
+            <Link href="/monetization">
+              <Button variant="outline">Monetization</Button>
+            </Link>
             <span>Welcome, {user?.username}</span>
             <Button variant="ghost" size="icon" onClick={() => logoutMutation.mutate()}>
               <LogOut className="h-5 w-5" />

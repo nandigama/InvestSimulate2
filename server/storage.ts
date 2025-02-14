@@ -1,10 +1,14 @@
-import { users, portfolios, transactions } from "@shared/schema";
-import type { User, InsertUser, Portfolio, Transaction, Trade } from "@shared/schema";
+import { users, portfolios, transactions, subscriptions, payments } from "@shared/schema";
+import type { 
+  User, InsertUser, Portfolio, Transaction, 
+  Trade, Subscription, Payment, UpdateTrader 
+} from "@shared/schema";
 import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { pool } from "./db";
+import { sql } from 'drizzle-orm';
 
 const PostgresSessionStore = connectPg(session);
 
@@ -12,15 +16,23 @@ export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
-
   getPortfolio(userId: number): Promise<Portfolio[]>;
   executeTransaction(userId: number, trade: Trade): Promise<Transaction>;
   getTransactions(userId: number): Promise<Transaction[]>;
   updateBalance(userId: number, amount: number): Promise<User>;
-
   getLeaderboard(): Promise<Array<{ username: string; totalValue: number }>>;
-
   sessionStore: session.Store;
+
+  // New methods for monetization
+  updateTraderProfile(userId: number, update: UpdateTrader): Promise<User>;
+  getTraders(): Promise<User[]>;
+  createSubscription(subscriberId: number, traderId: number): Promise<Subscription>;
+  getActiveSubscription(subscriberId: number, traderId: number): Promise<Subscription | undefined>;
+  cancelSubscription(subscriptionId: number): Promise<void>;
+  processPayment(subscriptionId: number): Promise<Payment>;
+  getSubscriberCount(traderId: number): Promise<number>;
+  getSubscriptionRevenue(traderId: number): Promise<string>;
+  getActiveSubscriptions(userId: number): Promise<Subscription[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -171,6 +183,148 @@ export class DatabaseStorage implements IStorage {
     }
 
     return leaderboard.sort((a, b) => b.totalValue - a.totalValue);
+  }
+
+  async updateTraderProfile(userId: number, update: UpdateTrader): Promise<User> {
+    const [updatedUser] = await db
+      .update(users)
+      .set({
+        isTrader: true,
+        monthlySubscriptionFee: update.monthlySubscriptionFee.toString(),
+        bio: update.bio,
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    return updatedUser;
+  }
+
+  async getTraders(): Promise<User[]> {
+    return db
+      .select()
+      .from(users)
+      .where(eq(users.isTrader, true))
+      .orderBy(desc(users.monthlySubscriptionFee));
+  }
+
+  async createSubscription(subscriberId: number, traderId: number): Promise<Subscription> {
+    const trader = await this.getUser(traderId);
+    if (!trader || !trader.isTrader) {
+      throw new Error("Invalid trader");
+    }
+
+    const existingSubscription = await this.getActiveSubscription(subscriberId, traderId);
+    if (existingSubscription) {
+      throw new Error("Already subscribed to this trader");
+    }
+
+    const [subscription] = await db
+      .insert(subscriptions)
+      .values({
+        subscriberId,
+        traderId,
+        status: "active",
+        monthlyFee: trader.monthlySubscriptionFee,
+      })
+      .returning();
+
+    return subscription;
+  }
+
+  async getActiveSubscription(subscriberId: number, traderId: number): Promise<Subscription | undefined> {
+    const [subscription] = await db
+      .select()
+      .from(subscriptions)
+      .where(
+        and(
+          eq(subscriptions.subscriberId, subscriberId),
+          eq(subscriptions.traderId, traderId),
+          eq(subscriptions.status, "active")
+        )
+      );
+    return subscription;
+  }
+
+  async cancelSubscription(subscriptionId: number): Promise<void> {
+    await db
+      .update(subscriptions)
+      .set({
+        status: "cancelled",
+        endDate: new Date(),
+      })
+      .where(eq(subscriptions.id, subscriptionId));
+  }
+
+  async processPayment(subscriptionId: number): Promise<Payment> {
+    const [subscription] = await db
+      .select()
+      .from(subscriptions)
+      .where(eq(subscriptions.id, subscriptionId));
+
+    if (!subscription) {
+      throw new Error("Subscription not found");
+    }
+
+    const [payment] = await db
+      .insert(payments)
+      .values({
+        subscriptionId,
+        amount: subscription.monthlyFee,
+        status: "completed",
+      })
+      .returning();
+
+    await db
+      .update(subscriptions)
+      .set({
+        lastBillingDate: new Date(),
+      })
+      .where(eq(subscriptions.id, subscriptionId));
+
+    return payment;
+  }
+
+  async getSubscriberCount(traderId: number): Promise<number> {
+    const [result] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(subscriptions)
+      .where(
+        and(
+          eq(subscriptions.traderId, traderId),
+          eq(subscriptions.status, "active")
+        )
+      );
+    return result?.count || 0;
+  }
+
+  async getSubscriptionRevenue(traderId: number): Promise<string> {
+    const [result] = await db
+      .select({
+        total: sql<string>`sum(amount)`
+      })
+      .from(payments)
+      .innerJoin(
+        subscriptions,
+        eq(payments.subscriptionId, subscriptions.id)
+      )
+      .where(
+        and(
+          eq(subscriptions.traderId, traderId),
+          eq(payments.status, "completed")
+        )
+      );
+    return result?.total || "0";
+  }
+
+  async getActiveSubscriptions(userId: number): Promise<Subscription[]> {
+    return db
+      .select()
+      .from(subscriptions)
+      .where(
+        and(
+          eq(subscriptions.subscriberId, userId),
+          eq(subscriptions.status, "active")
+        )
+      );
   }
 }
 
